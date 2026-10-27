@@ -1,6 +1,6 @@
 # Mac Screen Recorder
 
-A small native macOS menu bar app: open it for a floating **1, 2, 3** countdown, then record. Click the red dot or press **⌘⌥⇧S** to stop. The finished H.264 MP4 is saved in `~/Documents/Videos`, Finder opens that folder with the new video selected, and the app quits.
+A small native macOS menu bar app: open it for a floating **1, 2, 3** countdown, then record. Click the red dot or press **⌘⌥⇧S** to stop and reveal the saved H.264 MP4 in Finder. Press **⌘⌥⇧T** instead to stop and open the recording in LosslessCut, ready to trim. Videos are saved in `~/Documents/Videos`; the recorder quits after opening the destination.
 
 No ffmpeg, conversion, recording window, Dock icon, or third-party dependencies.
 
@@ -15,14 +15,17 @@ open "/Applications/Mac Screen Recorder.app"
 
 The installer builds the camera-icon app, signs it with a persistent local certificate, and installs it into `/Applications`. It does not launch the app or start recording. Run the same script after pulling updates. Stop an active recording before installing.
 
-On first launch, allow **Screen & System Audio Recording** in System Settings → Privacy & Security. macOS may require you to quit and reopen the app after granting access. Documents access may also need approval. Once capture is ready, a small centered widget shows 1, 2, 3 for one second each, then disappears before recording starts. It does not take keyboard focus. Click the menu bar dot or press **⌘⌥⇧S** during the countdown to cancel without creating a recording or opening Finder.
+On first launch, allow **Screen & System Audio Recording** in System Settings → Privacy & Security. macOS may require you to quit and reopen the app after granting access. Documents access may also need approval. Once capture is ready, a small centered widget shows 1, 2, 3 for one second each, then disappears before recording starts. It does not take keyboard focus. Click the menu bar dot or press either stop shortcut during the countdown to cancel without creating a recording or opening another app.
 
 - **Red dot:** recording. Click it (either mouse button) or press **Command + Option + Shift + S** anywhere to stop.
+- **Stop and trim:** press **Command + Option + Shift + T** to finalize the MP4 and open it in LosslessCut. The first stop request chooses the destination; repeated shortcuts during saving do not switch it.
 - **Orange dot:** starting or finalizing the MP4. A stop during startup cancels capture or stops it as soon as startup completes.
-- **After saving:** Finder opens `~/Documents/Videos` with the saved video selected, and the app quits automatically. Open it again for another recording.
+- **After saving:** the normal stop opens Finder with the saved video selected; the trim shortcut opens LosslessCut with that video. Open the recorder again for another recording.
 - **Files:** local timestamps such as `2026-10-27_10-45-12-345.mp4`. Collisions receive `-2`, `-3`, etc.; existing videos are preserved.
 
 The first version records the **main display and cursor**, with **no microphone or system audio**, at up to 30 fps in SDR. Retina resolution is preserved up to a 3840 × 2160 bounding box; larger, portrait, and ultrawide screens are scaled proportionally to fit. The menu bar is part of the captured display. macOS may also show its own capture indicator or permission reminders.
+
+Install the optional trim editor with `brew install --cask losslesscut`. The recorder supports the Homebrew/GitHub and Mac App Store bundle identifiers, plus the standard `/Applications` and `~/Applications` locations. It opens the completed file through macOS LaunchServices, with no AppleScript, Accessibility, or Automation permission required. If LosslessCut is missing or cannot launch, the original MP4 remains saved, Finder reveals it, and the recorder shows the error. Trimming/exporting is performed by you in LosslessCut; the recorder never overwrites the original file.
 
 ## How it saves MP4 directly
 
@@ -49,6 +52,15 @@ open -W "dist/Mac Screen Recorder.app" --args --smoke-test
 ```
 
 Check the resulting `.mp4` in QuickTime or, optionally, with `ffprobe`. Also test a normal launch followed by the global shortcut and another launch followed by a dot click. Confirm that the dot disappears only after saving, each file plays through its end, and repeated stop presses do not interrupt finalization.
+
+To exercise the trim destination automatically after a three-second recording, use `--smoke-test-trim` instead of `--smoke-test`. This creates a real MP4 and opens LosslessCut with it. Both stop shortcuts also cancel the startup countdown without opening an editor or creating a recording.
+
+The Carbon routing check registers both shortcuts, sends app-local hotkey events to verify their distinct actions, rejects unrelated identifiers, and verifies cleanup. Run it while the recorder is stopped:
+
+```sh
+xcrun swiftc -parse-as-library Sources/MacScreenRecorder/GlobalShortcut.swift scripts/test-shortcuts.swift -o dist/test-shortcuts
+./dist/test-shortcuts
+```
 
 Swift tests cover filename collisions, folder errors, and encoder-safe capture dimensions for Retina, portrait, ultrawide, and odd-sized displays. They do not replace a real capture test with macOS permission granted.
 

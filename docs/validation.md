@@ -38,4 +38,12 @@ The development-session capture checks do not prove that the installed app has r
 - Stop by clicking the menu bar dot.
 - Stop with **⌘⌥⇧S** while another application is active, including confirmation on non-QWERTY layouts.
 
+## LosslessCut stop destination (v0.4.0)
+
+- Confirmed the user's Homebrew installation completed: LosslessCut 3.70.1 at `/Applications/LosslessCut.app`, bundle identifier `no.mifi.losslesscut-mac`.
+- `swift build -Xswiftc -warnings-as-errors`, `swift test`, release packaging, installed signature verification, and stable-signer installation passed.
+- `scripts/test-shortcuts.swift` registered both exclusive hotkeys and dispatched app-local Carbon events for S/save and T/trim. Distinct actions were received; unknown signatures/IDs were ignored; unregistering allowed both hotkeys to be registered again. This checks routing and cleanup, not physical keyboard input.
+- Installed-app `--smoke-test-trim` recorded a real MP4, finalized it, and opened it in LosslessCut through LaunchServices. The recorder exited normally.
+- Native UI inspection confirmed the matching filename in LosslessCut, a 2.998-second timeline, start/end cut controls, and Export. Played the video through to 88 frames / 2.998 seconds and visually confirmed the recording's preview. No trim or export was applied to the original recording.
+
 The available UI automation did not expose this windowless app's status item and did not trigger the global hotkey through its application-targeted keyboard input. Those interactions are implemented but have not been verified by physical input. A successful hotkey registration alone is not a complete end-to-end shortcut test.
