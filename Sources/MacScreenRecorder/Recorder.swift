@@ -18,6 +18,7 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
     }
     private var stream: SCStream?
     private var output: SCRecordingOutput?
+    private var frameProbe: FirstFrameProbe?
     private var destination: URL?
     private var captureStarted = false
     private var stopRequested = false
@@ -28,12 +29,15 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
 
     func start() async {
         do {
+            StartupTiming.mark("permission_check_begin")
             guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
                 throw RecordingError.permission
             }
+            StartupTiming.mark("permission_granted")
             let content = try await SCShareableContent.excludingDesktopWindows(
                 false, onScreenWindowsOnly: true
             )
+            StartupTiming.mark("content_discovered")
             // A click/hotkey while content is loading must cancel rather than start a hidden capture.
             guard !stopRequested else {
                 finishWithoutRecording()
@@ -80,12 +84,22 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
 
             let recordingOutput = SCRecordingOutput(configuration: recordingConfig, delegate: self)
             let captureStream = SCStream(filter: filter, configuration: config, delegate: self)
+            if StartupTiming.enabled {
+                let probe = FirstFrameProbe()
+                try captureStream.addStreamOutput(
+                    probe, type: .screen,
+                    sampleHandlerQueue: DispatchQueue(label: "com.nagy135.mac-screen-recorder.startup-timing")
+                )
+                frameProbe = probe
+            }
             // Attach before capture starts so the first frame reaches the file.
             try captureStream.addRecordingOutput(recordingOutput)
             destination = url
             output = recordingOutput
             stream = captureStream
+            StartupTiming.mark("start_capture_requested")
             try await captureStream.startCapture()
+            StartupTiming.mark("start_capture_returned")
             captureStarted = true
             // Covers a stop arriving while startCapture was suspended.
             if stopRequested { await stopCapture() }
@@ -135,9 +149,11 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
     }
 
     nonisolated func recordingOutputDidStartRecording(_ recordingOutput: SCRecordingOutput) {
+        let callbackTime = DispatchTime.now().uptimeNanoseconds
         let identifier = ObjectIdentifier(recordingOutput)
         Task { @MainActor [weak self] in
             guard let self, let output, ObjectIdentifier(output) == identifier, !terminal else { return }
+            StartupTiming.mark("recording_output_started", at: callbackTime)
             if !stopRequested { phase = .recording }
         }
     }

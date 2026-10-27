@@ -54,6 +54,18 @@ Swift tests cover filename collisions, folder errors, and encoder-safe capture d
 
 The build script packages a standalone `.app` with a camera icon in `dist/`. No Xcode project generator is required; `Package.swift` can also be opened in Xcode.
 
+## Measure startup delay
+
+Run a short recording with opt-in monotonic timing diagnostics:
+
+```sh
+"/Applications/Mac Screen Recorder.app/Contents/MacOS/MacScreenRecorder" --measure-startup --smoke-test 2> dist/startup-timing.log
+```
+
+Each `STARTUP_TIMING` line contains JSON with a stage and elapsed milliseconds since app entry. Stages cover launch, permission, content discovery, countdown visibility, the 150 ms hide delay, output setup, capture startup, the first complete frame's arrival, and the native recording-start callback. This command creates a normal three-second clip and opens Finder afterward.
+
+Normal launches do not enable timing logs or the diagnostic frame observer. The first-frame measurement is callback arrival time, not a measurement of when pixels reached the display or were committed to disk. The recording-start callback is measured separately from `startCapture()` returning. See [the measured startup report](docs/startup-timing.md) for results and limitations.
+
 ## Permission continuity across updates
 
 Local builds create a **persistent, app-specific signing certificate** once and reuse it. The private key is stored in a dedicated Keychain under `~/Library/Application Support/Mac Screen Recorder/Signing`, outside the repository. The directory and its password file are restricted to your user. The key's access controls authorize `/usr/bin/codesign` and configure the Apple signing partitions so subsequent builds do not need a Keychain approval dialog. Setup trusts this certificate for **code signing only**, in your user's trust settings. It does not change TLS trust, system roots, or Gatekeeper policy.

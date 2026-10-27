@@ -75,11 +75,14 @@ final class RecordingCountdown {
                             : NSColor.white.withAlphaComponent(0.2)).cgColor
                     }
                     panel.orderFrontRegardless()
+                    StartupTiming.mark("countdown_\(value)")
                     try await Task.sleep(for: .seconds(1))
                 }
                 panel.orderOut(nil)
+                StartupTiming.mark("countdown_hidden")
                 // Let WindowServer present the removal before ScreenCaptureKit starts.
                 try await Task.sleep(for: .milliseconds(150))
+                StartupTiming.mark("countdown_complete")
                 return true
             } catch {
                 return false

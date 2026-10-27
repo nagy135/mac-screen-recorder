@@ -5,6 +5,7 @@ import CoreGraphics
 struct MacScreenRecorderApp {
     @MainActor
     static func main() {
+        StartupTiming.mark("process_entry")
         if CommandLine.arguments.contains("--check-permission") {
             print(CGPreflightScreenCaptureAccess() ? "Screen recording: allowed" : "Screen recording: permission required")
             return
@@ -27,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var smokeTestScheduled = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        StartupTiming.mark("application_ready")
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem = item
         if let button = item.button {
@@ -100,6 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem?.button?.image = image
         statusItem?.button?.toolTip = text
         statusItem?.button?.setAccessibilityValue(text)
+        if case .recording = phase { StartupTiming.mark("recording_indicator_updated") }
     }
 
     private func showError(_ error: Error) {
