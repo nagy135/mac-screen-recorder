@@ -3,3 +3,8 @@
 dist/
 .DS_Store
 *.xcuserstate
+*.p12
+*.pfx
+*.key
+*.keychain
+*.keychain-db

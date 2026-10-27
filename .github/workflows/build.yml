@@ -16,6 +16,8 @@ jobs:
         run: swift test
       - name: Build app
         run: ./scripts/build.sh
+        env:
+          SIGNING_IDENTITY: '-'
       - name: Zip app preserving bundle metadata
         run: ditto -c -k --sequesterRsrc --keepParent "dist/Mac Screen Recorder.app" dist/Mac-Screen-Recorder.zip
       - uses: actions/upload-artifact@v4

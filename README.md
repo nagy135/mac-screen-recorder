@@ -9,11 +9,11 @@ No ffmpeg, conversion, countdown, recording window, Dock icon, or third-party de
 Requires **macOS 15 or later**. Build with Xcode 16+ / Swift 6+ and its command line tools:
 
 ```sh
-./scripts/build.sh
-open "dist/Mac Screen Recorder.app"
+./scripts/install.sh
+open "/Applications/Mac Screen Recorder.app"
 ```
 
-You can copy `dist/Mac Screen Recorder.app` to `/Applications` or `~/Applications`. Choose its permanent location before granting screen-recording permission.
+The installer builds the camera-icon app, signs it with a persistent local certificate, and installs it into `/Applications`. It does not launch the app or start recording. Run the same script after pulling updates. Stop an active recording before installing.
 
 On first launch, allow **Screen & System Audio Recording** in System Settings → Privacy & Security. macOS may require you to quit and reopen the app after granting access. Documents access may also need approval. Later launches start recording as soon as macOS starts the capture stream.
 
@@ -52,6 +52,18 @@ Check the resulting `.mp4` in QuickTime or, optionally, with `ffprobe`. Also tes
 
 Swift tests cover filename collisions, folder errors, and encoder-safe capture dimensions for Retina, portrait, ultrawide, and odd-sized displays. They do not replace a real capture test with macOS permission granted.
 
-The build script packages and ad-hoc signs a standalone `.app` in `dist/`. No Xcode project generator is required; `Package.swift` can also be opened in Xcode. Local rebuilds keep a stable bundle identifier and designated requirement, although macOS can still require permission again. Set `SIGNING_IDENTITY` to use a signing certificate. A public binary distribution should use Developer ID signing and notarization; the default local build is not notarized.
+The build script packages a standalone `.app` with a camera icon in `dist/`. No Xcode project generator is required; `Package.swift` can also be opened in Xcode.
+
+## Permission continuity across updates
+
+Local builds create a **persistent, app-specific signing certificate** once and reuse it. The private key is stored in a dedicated Keychain under `~/Library/Application Support/Mac Screen Recorder/Signing`, outside the repository. The directory and its password file are restricted to your user. The key's access controls authorize `/usr/bin/codesign` and configure the Apple signing partitions so subsequent builds do not need a Keychain approval dialog. Setup trusts this certificate for **code signing only**, in your user's trust settings. It does not change TLS trust, system roots, or Gatekeeper policy.
+
+Every build keeps the same bundle identifier and a designated requirement pinned to that certificate. The installer checks that the installed app and update satisfy each other's requirements before replacing the app at its fixed `/Applications` path. It refuses a mismatched signer, leaves an active recording alone, and restores the old app if replacement fails.
+
+Grant screen-recording permission once to the installed app. Updates installed with `./scripts/install.sh` preserve its signing identity, avoiding the changing-build identity that causes repeated authorization. Migrating from the old ad-hoc build may require one new grant. **Keep the Signing directory**: losing it or switching signing certificates can require permission again. Back it up securely with your Mac; never commit it or upload it to GitHub.
+
+macOS retains control over first-use consent, revoked permissions, and periodic screen-recording reminders; the app cannot guarantee that the operating system will never show a prompt. See [Apple's designated-requirement explanation](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+
+Set `SIGNING_IDENTITY` to use your own existing certificate instead. `SIGNING_IDENTITY=- ./scripts/build.sh` produces an ad-hoc test artifact; the installer rejects it. Public binary distribution should use Developer ID signing and notarization. The default certificate is local to this Mac and is not an Apple Developer ID.
 
 GitHub Actions runs tests, builds the app on macOS, and uploads a zipped app artifact. Downloaded ad-hoc builds may be blocked by Gatekeeper; building locally is the supported initial installation path.

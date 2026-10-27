@@ -36,7 +36,9 @@ macOS requires the user to authorize screen capture. The app checks with `CGPref
 
 The app runs outside App Sandbox so it can use the requested fixed Documents destination. A sandboxed Mac App Store version would need a separate design for user-selected folder access and persistent security-scoped bookmarks.
 
-Local development uses ad-hoc code signing with a stable bundle identifier. Reliable public binary distribution needs Developer ID signing and notarization; making the source repository public does not provide either.
+Local development uses a persistent, app-specific certificate in a dedicated user Keychain, with a designated requirement that pins the bundle identifier and certificate. The installer keeps the path stable and checks signing compatibility before replacing an installed version. This allows macOS to recognize updates as the same code identity; the old ad-hoc approach was insufficient for reliable permission continuity. See [TN3127: Requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements) and [Apple's code-signing guide](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Procedures/Procedures.html).
+
+This is local development signing, not a public distribution identity. Reliable public binary distribution needs Developer ID signing and notarization; making the source repository public does not provide either. CI uses explicit ad-hoc signing, and its artifact is not accepted by the local installer.
 
 Sources: [Apple's screen-recording privacy controls](https://support.apple.com/guide/mac-help/control-access-to-screen-and-system-audio-recording-mchld6aa7d23/mac), [CGPreflightScreenCaptureAccess](https://developer.apple.com/documentation/coregraphics/cgpreflightscreencaptureaccess()), [CGRequestScreenCaptureAccess](https://developer.apple.com/documentation/coregraphics/cgrequestscreencaptureaccess()), and [notarizing macOS software](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution).
 
