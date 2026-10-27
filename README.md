@@ -1,6 +1,6 @@
 # Mac Screen Recorder
 
-A small native macOS menu bar app: open it for a floating **1, 2, 3** countdown, then record. Click the red dot or press **⌘⌥⇧S** to stop. The finished H.264 MP4 is saved in `~/Documents/Videos`, then the app quits.
+A small native macOS menu bar app: open it for a floating **1, 2, 3** countdown, then record. Click the red dot or press **⌘⌥⇧S** to stop. The finished H.264 MP4 is saved in `~/Documents/Videos`, Finder opens that folder with the new video selected, and the app quits.
 
 No ffmpeg, conversion, recording window, Dock icon, or third-party dependencies.
 
@@ -15,11 +15,11 @@ open "/Applications/Mac Screen Recorder.app"
 
 The installer builds the camera-icon app, signs it with a persistent local certificate, and installs it into `/Applications`. It does not launch the app or start recording. Run the same script after pulling updates. Stop an active recording before installing.
 
-On first launch, allow **Screen & System Audio Recording** in System Settings → Privacy & Security. macOS may require you to quit and reopen the app after granting access. Documents access may also need approval. Once capture is ready, a small centered widget shows 1, 2, 3 for one second each, then disappears before recording starts. It does not take keyboard focus. Click the menu bar dot or press **⌘⌥⇧S** during the countdown to cancel without creating a recording.
+On first launch, allow **Screen & System Audio Recording** in System Settings → Privacy & Security. macOS may require you to quit and reopen the app after granting access. Documents access may also need approval. Once capture is ready, a small centered widget shows 1, 2, 3 for one second each, then disappears before recording starts. It does not take keyboard focus. Click the menu bar dot or press **⌘⌥⇧S** during the countdown to cancel without creating a recording or opening Finder.
 
 - **Red dot:** recording. Click it (either mouse button) or press **Command + Option + Shift + S** anywhere to stop.
 - **Orange dot:** starting or finalizing the MP4. A stop during startup cancels capture or stops it as soon as startup completes.
-- **After saving:** the app quits automatically. Open it again for another recording.
+- **After saving:** Finder opens `~/Documents/Videos` with the saved video selected, and the app quits automatically. Open it again for another recording.
 - **Files:** local timestamps such as `2026-10-27_10-45-12-345.mp4`. Collisions receive `-2`, `-3`, etc.; existing videos are preserved.
 
 The first version records the **main display and cursor**, with **no microphone or system audio**, at up to 30 fps in SDR. Retina resolution is preserved up to a 3840 × 2160 bounding box; larger, portrait, and ultrawide screens are scaled proportionally to fit. The menu bar is part of the captured display. macOS may also show its own capture indicator or permission reminders.
@@ -42,7 +42,7 @@ swift test
 
 `--check-permission` prints the current permission status and exits without requesting access or recording. Permissions observed from a terminal can differ from a Finder launch; test the installed app as well.
 
-Once permissions are granted, this shows the normal countdown, records a three-second smoke-test clip into the normal destination and exits after finalization:
+Once permissions are granted, this shows the normal countdown, records a three-second smoke-test clip into the normal destination, opens Finder, and exits after finalization:
 
 ```sh
 open -W "dist/Mac Screen Recorder.app" --args --smoke-test

@@ -43,7 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return await countdown.run()
         }
         recorder.onFinish = { [weak self] url in
-            if let url { NSLog("Saved recording: %@", url.path) }
+            if let url {
+                NSLog("Saved recording: %@", url.path)
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
             self?.quit()
         }
         recorder.onFailure = { [weak self] error in self?.showError(error) }
