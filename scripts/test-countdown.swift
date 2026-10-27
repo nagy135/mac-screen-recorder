@@ -29,7 +29,7 @@ struct CountdownCheck {
                 precondition(number.stringValue == "1", "Countdown must run 3, 2, 1; received \(number.stringValue)")
                 content.mouseEntered(with: event)
                 try await Task.sleep(for: .milliseconds(300))
-                precondition(panel.frame.width == 280, "Hover must expand the HUD")
+                precondition(panel.frame.width == 240, "Hover must expand the HUD")
                 let switches = descendants(content).compactMap { $0 as? NSSwitch }
                 let systemAudio = switches.first { $0.accessibilityLabel() == "Mac audio" }!
                 let microphone = switches.first { $0.accessibilityLabel() == "Microphone" }!
@@ -61,7 +61,7 @@ struct CountdownCheck {
                 try await Task.sleep(for: .milliseconds(30))
                 content.mouseEntered(with: event)
                 try await Task.sleep(for: .milliseconds(300))
-                precondition(panel.frame.width == 280, "Rapid hover reversals must finish expanded")
+                precondition(panel.frame.width == 240, "Rapid hover reversals must finish expanded")
                 precondition(systemAudio.state == .on, "Re-entering must retain choices")
                 content.mouseExited(with: event)
                 let restarted = ContinuousClock.now
@@ -74,7 +74,10 @@ struct CountdownCheck {
                 try await Task.sleep(for: .milliseconds(100))
                 content.mouseEntered(with: event)
                 precondition(systemAudio.state == .off, "Each recording starts with audio off")
-                countdown.cancel()
+                let cancelButton = descendants(content).compactMap { $0 as? NSButton }
+                    .first { $0.accessibilityLabel() == "Cancel recording" }!
+                cancelButton.performClick(nil)
+                precondition(!panel.isVisible, "The cancel button must close the HUD")
                 countdown.cancel()
                 let cancelledResult = await cancelled.value
                 precondition(cancelledResult == nil, "Cancellation must return no settings")
@@ -83,8 +86,11 @@ struct CountdownCheck {
                 let hiding = Task { await countdown.run() }
                 try await Task.sleep(for: .milliseconds(100))
                 content.mouseExited(with: event)
-                try await Task.sleep(for: .milliseconds(3_050))
-                precondition(!panel.isVisible)
+                for _ in 0..<400 {
+                    if !panel.isVisible { break }
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                precondition(!panel.isVisible, "Countdown must hide before capture")
                 countdown.cancel()
                 let hidingResult = await hiding.value
                 precondition(hidingResult == nil, "Cancellation during hide delay must prevent capture")
@@ -119,7 +125,7 @@ struct CountdownCheck {
         microphone.sendAction(microphone.action, to: microphone.target)
         content.mouseExited(with: event)
         try await Task.sleep(for: .milliseconds(3_200))
-        precondition(panel.isVisible && panel.frame.width == 280, "Permission prompt must hold the controls open")
+        precondition(panel.isVisible && panel.frame.width == 240, "Permission prompt must hold the controls open")
         precondition(!microphone.isEnabled)
         resolvePermission!.resume(returning: allowed)
         try await Task.sleep(for: .milliseconds(50))

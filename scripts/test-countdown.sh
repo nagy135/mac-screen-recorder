@@ -12,5 +12,6 @@ fi
 mkdir -p dist
 xcrun swiftc -parse-as-library -I "$binary_directory" -I "$binary_directory/Modules" \
     "${core_objects[@]}" Sources/MacScreenRecorder/RecordingCountdown.swift \
-    Sources/MacScreenRecorder/StartupTiming.swift scripts/test-countdown.swift -o dist/test-countdown
+    Sources/MacScreenRecorder/GlobalShortcut.swift Sources/MacScreenRecorder/StartupTiming.swift \
+    scripts/test-countdown.swift -o dist/test-countdown
 ./dist/test-countdown "$@"

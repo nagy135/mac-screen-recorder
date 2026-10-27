@@ -13,8 +13,7 @@ final class RecordingCountdown: NSObject {
     private let number = NSTextField(labelWithString: "3")
     private let systemAudioSwitch = NSSwitch()
     private let microphoneSwitch = NSSwitch()
-    private let hint = NSTextField(labelWithString: "Move away to restart from 3")
-    private let settingsButton = NSButton(title: "Allow microphone in System Settings", target: nil, action: nil)
+    private let settingsButton = NSButton()
     private var steps: [NSView] = []
     private var state = CountdownState()
     private var audio = RecordingAudioSettings()
@@ -72,7 +71,7 @@ final class RecordingCountdown: NSObject {
         panel.contentView = glass
 
         countdownView.frame = bounds
-        countdownView.autoresizingMask = [.minXMargin, .maxXMargin]
+        countdownView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
         countdownView.wantsLayer = true
         glass.addSubview(countdownView)
         number.font = .monospacedDigitSystemFont(ofSize: 72, weight: .medium)
@@ -83,7 +82,7 @@ final class RecordingCountdown: NSObject {
         countdownView.addSubview(number)
         addLabel("Starting recording", to: countdownView,
                  frame: NSRect(x: 10, y: 40, width: 160, height: 18), size: 12, centered: true)
-        addLabel("Hover for audio", to: countdownView,
+        addLabel("Hover for options", to: countdownView,
                  frame: NSRect(x: 10, y: 5, width: 160, height: 14), size: 10, centered: true)
         for index in 0..<3 {
             let step = NSView(frame: NSRect(x: 69 + index * 16, y: 25, width: 10, height: 4))
@@ -93,28 +92,39 @@ final class RecordingCountdown: NSObject {
             steps.append(step)
         }
 
-        optionsView.frame = NSRect(x: -50, y: 0, width: 280, height: 184)
-        optionsView.autoresizingMask = [.minXMargin, .maxXMargin]
+        optionsView.frame = NSRect(x: -30, y: 0, width: 240, height: 184)
+        optionsView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
         optionsView.wantsLayer = true
         optionsView.isHidden = true
         glass.addSubview(optionsView)
-        addLabel("Record audio", to: optionsView,
-                 frame: NSRect(x: 22, y: 146, width: 236, height: 22), size: 17, bold: true)
-        addLabel("Choose what goes into your video", to: optionsView,
-                 frame: NSRect(x: 22, y: 126, width: 236, height: 16), size: 11)
-        addAudioRow("Mac audio", symbol: "speaker.wave.2", y: 88, control: systemAudioSwitch,
+        addLabel("Audio", to: optionsView,
+                 frame: NSRect(x: 20, y: 148, width: 140, height: 20), size: 13, bold: true)
+        let cancelButton = NSButton()
+        cancelButton.frame = NSRect(x: 166, y: 146, width: 58, height: 24)
+        cancelButton.title = "Cancel"
+        cancelButton.font = .systemFont(ofSize: 11, weight: .semibold)
+        cancelButton.isBordered = false
+        cancelButton.wantsLayer = true
+        cancelButton.layer?.cornerRadius = 7
+        cancelButton.layer?.backgroundColor = NSColor.systemRed.cgColor
+        cancelButton.contentTintColor = .white
+        cancelButton.toolTip = "Cancel recording"
+        cancelButton.setAccessibilityLabel("Cancel recording")
+        cancelButton.target = self
+        cancelButton.action = #selector(cancelFromButton)
+        optionsView.addSubview(cancelButton)
+        addAudioRow("Mac audio", symbol: "speaker.wave.2", y: 107, control: systemAudioSwitch,
                     action: #selector(systemAudioChanged))
-        addAudioRow("Microphone", symbol: "mic", y: 49, control: microphoneSwitch,
+        addAudioRow("Microphone", symbol: "mic", y: 71, control: microphoneSwitch,
                     action: #selector(microphoneChanged))
-        hint.frame = NSRect(x: 12, y: 13, width: 256, height: 18)
-        hint.font = .systemFont(ofSize: 11)
-        hint.textColor = NSColor.white.withAlphaComponent(0.65)
-        hint.alignment = .center
-        optionsView.addSubview(hint)
-        settingsButton.frame = hint.frame
+        addShortcutHint(action: .save, x: 12, width: 88)
+        addShortcutHint(action: .trim, x: 112, width: 116)
+        settingsButton.frame = NSRect(x: 157, y: 76, width: 18, height: 20)
+        settingsButton.image = NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: nil)
         settingsButton.isBordered = false
-        settingsButton.font = .systemFont(ofSize: 11)
         settingsButton.contentTintColor = .systemOrange
+        settingsButton.toolTip = "Allow microphone access in System Settings"
+        settingsButton.setAccessibilityLabel("Open microphone permissions")
         settingsButton.target = self
         settingsButton.action = #selector(openMicrophoneSettings)
         settingsButton.isHidden = true
@@ -128,9 +138,8 @@ final class RecordingCountdown: NSObject {
         systemAudioSwitch.state = .off
         microphoneSwitch.state = .off
         microphoneSwitch.isEnabled = true
+        microphoneSwitch.toolTip = "Record the default microphone"
         settingsButton.isHidden = true
-        hint.isHidden = false
-        hint.stringValue = "Move away to restart from 3"
         showOptions(false)
         if let screen = NSScreen.screens.first {
             let frame = screen.visibleFrame
@@ -150,6 +159,10 @@ final class RecordingCountdown: NSObject {
     func cancel() {
         runID = UUID()
         finish(nil)
+    }
+
+    @objc private func cancelFromButton() {
+        cancel()
     }
 
     private func finish(_ result: RecordingAudioSettings?) {
@@ -210,9 +223,11 @@ final class RecordingCountdown: NSObject {
         showingOptions = visible
         let currentTransition = UUID()
         transitionID = currentTransition
-        let width: CGFloat = visible ? 280 : 180
+        let width: CGFloat = visible ? 240 : 180
+        let height: CGFloat = 184
         let frame = panel.frame
-        let target = NSRect(x: frame.midX - width / 2, y: frame.minY, width: width, height: 184)
+        let target = NSRect(x: frame.midX - width / 2, y: frame.midY - height / 2,
+                            width: width, height: height)
         guard panel.isVisible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
             panel.setFrame(target, display: true)
             countdownView.alphaValue = visible ? 0 : 1
@@ -253,12 +268,12 @@ final class RecordingCountdown: NSObject {
         switch microphoneAuthorizationStatus() {
         case .authorized:
             audio.microphone = true
-            updatePermissionHint(allowed: true)
+            updateMicrophoneStatus(allowed: true)
         case .notDetermined:
             state.setWaitingForPermission(true)
             showOptions(true)
             microphoneSwitch.isEnabled = false
-            hint.stringValue = "Waiting for microphone permission…"
+            microphoneSwitch.toolTip = "Waiting for microphone permission…"
             restartTimer()
             let currentRun = runID
             let requestAccess = requestMicrophoneAccess
@@ -270,20 +285,20 @@ final class RecordingCountdown: NSObject {
                 microphoneSwitch.isEnabled = true
                 state.setWaitingForPermission(false)
                 state.setHovering(glass.containsMouse)
-                updatePermissionHint(allowed: allowed)
+                updateMicrophoneStatus(allowed: allowed)
                 showOptions(state.isPaused)
                 restartTimer()
             }
         default:
             audio.microphone = false
             microphoneSwitch.state = .off
-            updatePermissionHint(allowed: false)
+            updateMicrophoneStatus(allowed: false)
         }
     }
 
-    private func updatePermissionHint(allowed: Bool) {
-        hint.stringValue = "Move away to restart from 3"
-        hint.isHidden = !allowed
+    private func updateMicrophoneStatus(allowed: Bool) {
+        microphoneSwitch.toolTip = allowed ? "Record the default microphone"
+            : "Microphone access is off. Allow it in System Settings."
         settingsButton.isHidden = allowed
     }
 
@@ -305,16 +320,30 @@ final class RecordingCountdown: NSObject {
 
     private func addAudioRow(_ title: String, symbol: String, y: CGFloat,
                              control: NSSwitch, action: Selector) {
-        let image = NSImageView(frame: NSRect(x: 23, y: y + 5, width: 20, height: 20))
+        let image = NSImageView(frame: NSRect(x: 20, y: y + 5, width: 18, height: 20))
         image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         image.contentTintColor = NSColor.white.withAlphaComponent(0.8)
         optionsView.addSubview(image)
-        addLabel(title, to: optionsView, frame: NSRect(x: 53, y: y + 5, width: 150, height: 20), size: 13)
-        control.frame = NSRect(x: 218, y: y, width: 40, height: 30)
+        addLabel(title, to: optionsView, frame: NSRect(x: 46, y: y + 5, width: 110, height: 20), size: 12)
+        control.frame = NSRect(x: 184, y: y, width: 36, height: 30)
         control.target = self
         control.action = action
         control.setAccessibilityLabel(title)
         optionsView.addSubview(control)
+    }
+
+    private func addShortcutHint(action: GlobalShortcut.Action, x: CGFloat, width: CGFloat) {
+        let group = NSView(frame: NSRect(x: x, y: 21, width: width, height: 20))
+        let title = action == .save ? "Stop and save" : "Stop and trim"
+        group.toolTip = "\(title) (\(action.label)); cancels during countdown"
+        let destination = action == .save ? "Finder" : "LosslessCut"
+        let label = NSTextField(labelWithString: "\(action.label) → \(destination)")
+        label.frame = NSRect(x: 0, y: 1, width: width, height: 18)
+        label.font = .systemFont(ofSize: 10, weight: .medium)
+        label.textColor = NSColor.white.withAlphaComponent(0.4)
+        label.setAccessibilityLabel("\(title): Command Option Shift \(action.label.last!)")
+        group.addSubview(label)
+        optionsView.addSubview(group)
     }
 }
 
