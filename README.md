@@ -8,9 +8,9 @@ No ffmpeg, conversion, recording window, Dock icon, or third-party dependencies.
 
 Hover to choose Mac audio and microphone, then move away to restart the countdown.
 
-https://github.com/user-attachments/assets/308b7c2c-857a-4353-a68e-6b89366d34a2
+[![Watch the Mac Screen Recorder demo](docs/media/preview.jpg)](docs/media/preview.mp4)
 
-[Download the preview MP4](docs/media/preview.mp4)
+[Watch or download the preview MP4](docs/media/preview.mp4) (18 seconds, 537 KB).
 
 ## Use
 
