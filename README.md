@@ -4,6 +4,14 @@ A small native macOS menu bar app: open it for a floating **3, 2, 1** countdown,
 
 No ffmpeg, conversion, recording window, Dock icon, or third-party dependencies.
 
+## Preview
+
+Hover to choose Mac audio and microphone, then move away to restart the countdown.
+
+https://github.com/user-attachments/assets/308b7c2c-857a-4353-a68e-6b89366d34a2
+
+[Download the preview MP4](docs/media/preview.mp4)
+
 ## Use
 
 Requires **macOS 15 or later**. Build with Xcode 16+ / Swift 6+ and its command line tools:
@@ -17,13 +25,15 @@ The installer builds the camera-icon app, signs it with a persistent local certi
 
 On first launch, allow **Screen & System Audio Recording** in System Settings → Privacy & Security. macOS may require you to quit and reopen the app after granting access. Documents access may also need approval. Once capture is ready, a small centered widget shows 3, 2, 1 for one second each, then disappears before recording starts. It does not take keyboard focus. Click the menu bar dot or press either stop shortcut during the countdown to cancel without creating a recording or opening another app.
 
+Hover over the countdown to replace it with audio controls and pause it. Enable **Mac audio** to include the Mac's sound, **Microphone** to include the default input device, or both. Both switches start off for each recording. Moving away restarts the full **3, 2, 1** countdown with your choices; hovering again lets you revise them. The controls stay paused while macOS asks for microphone permission. If access is denied, the microphone switch stays off and a link opens its System Settings permission page. System audio and microphone audio are included in the MP4 through native ScreenCaptureKit recording.
+
 - **Red dot:** recording. Click it (either mouse button) or press **Command + Option + Shift + S** anywhere to stop.
 - **Stop and trim:** press **Command + Option + Shift + T** to finalize the MP4 and open it in LosslessCut. The first stop request chooses the destination; repeated shortcuts during saving do not switch it.
 - **Orange dot:** starting or finalizing the MP4. A stop during startup cancels capture or stops it as soon as startup completes.
 - **After saving:** the normal stop opens Finder with the saved video selected; the trim shortcut opens LosslessCut with that video. Open the recorder again for another recording.
 - **Files:** local timestamps such as `2026-10-27_10-45-12-345.mp4`. Collisions receive `-2`, `-3`, etc.; existing videos are preserved.
 
-The first version records the **main display and cursor**, with **no microphone or system audio**, at up to 30 fps in SDR. Retina resolution is preserved up to a 3840 × 2160 bounding box; larger, portrait, and ultrawide screens are scaled proportionally to fit. The menu bar is part of the captured display. macOS may also show its own capture indicator or permission reminders.
+The app records the **main display and cursor**, with optional **Mac audio and microphone**, at up to 30 fps in SDR. Retina resolution is preserved up to a 3840 × 2160 bounding box; larger, portrait, and ultrawide screens are scaled proportionally to fit. The menu bar is part of the captured display. macOS may also show its own capture indicator or permission reminders.
 
 Install the optional trim editor with `brew install --cask losslesscut`. The recorder supports the Homebrew/GitHub and Mac App Store bundle identifiers, plus the standard `/Applications` and `~/Applications` locations. It opens the completed file through macOS LaunchServices, with no AppleScript, Accessibility, or Automation permission required. If LosslessCut is missing or cannot launch, the original MP4 remains saved, Finder reveals it, and the recorder shows the error. Trimming/exporting is performed by you in LosslessCut; the recorder never overwrites the original file.
 
@@ -62,7 +72,15 @@ xcrun swiftc -parse-as-library Sources/MacScreenRecorder/GlobalShortcut.swift sc
 ./dist/test-shortcuts
 ```
 
-Swift tests cover filename collisions, folder errors, and encoder-safe capture dimensions for Retina, portrait, ultrawide, and odd-sized displays. They do not replace a real capture test with macOS permission granted.
+Swift tests cover filename collisions, folder errors, encoder-safe capture dimensions, and countdown pauses/resets across hover and permission changes. The native HUD check exercises the actual tracking-event handlers, switches, repeated restarts, cancellation, and hide delay without recording the desktop:
+
+```sh
+./scripts/test-countdown.sh
+```
+
+The HUD check saves images in `dist/` for layout inspection. Its permission checks use simulated responses and do not change macOS permissions. These checks do not replace a real capture test with macOS permission granted. To check audio manually, record with each combination of switches, play a sound for Mac audio, speak into the microphone, and confirm playback includes only the sources you enabled.
+
+For a three-second capture through the production recorder without opening Finder, run `./scripts/test-audio-recording.sh` (audio off), add `--system-audio`, add `--microphone`, or add both. This writes a real MP4 into `~/Documents/Videos` and prints its path. Microphone checks require permission already granted to the launching context; they do not request it.
 
 The build script packages a standalone `.app` with a camera icon in `dist/`. No Xcode project generator is required; `Package.swift` can also be opened in Xcode.
 

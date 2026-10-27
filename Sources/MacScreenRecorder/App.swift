@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         recorder.onPhaseChange = { [weak self] phase in self?.updateIndicator(phase) }
         recorder.beforeCapture = { [weak self] in
-            guard let self else { return false }
+            guard let self else { return nil }
             return await countdown.run()
         }
         recorder.onFinish = { [weak self] url in

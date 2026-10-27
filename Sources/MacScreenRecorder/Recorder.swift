@@ -12,7 +12,7 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
     var onPhaseChange: ((Phase) -> Void)?
     var onFinish: ((URL?) -> Void)?
     var onFailure: ((Error) -> Void)?
-    var beforeCapture: (() async -> Bool)?
+    var beforeCapture: (() async -> RecordingAudioSettings?)?
     private(set) var phase: Phase = .starting {
         didSet { onPhaseChange?(phase) }
     }
@@ -59,16 +59,29 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
             config.minimumFrameInterval = CMTime(value: 1, timescale: 30)
             config.queueDepth = 5
             config.showsCursor = true
-            config.capturesAudio = false
-            config.captureMicrophone = false
             config.captureDynamicRange = .SDR
 
+            var audio = RecordingAudioSettings()
             if let beforeCapture {
-                guard await beforeCapture(), !stopRequested else {
+                guard let selectedAudio = await beforeCapture(), !stopRequested else {
                     finishWithoutRecording()
                     return
                 }
+                audio = selectedAudio
             }
+            // Apply the final choices after the hoverable countdown has completed.
+            if audio.microphone {
+                guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
+                    throw RecordingError.microphonePermission
+                }
+                guard AVCaptureDevice.default(for: .audio) != nil else {
+                    throw RecordingError.noMicrophone
+                }
+            }
+            config.capturesAudio = audio.systemAudio
+            config.captureMicrophone = audio.microphone
+            config.sampleRate = 48_000
+            config.channelCount = 2
 
             let directory = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent("Documents/Videos", isDirectory: true)
@@ -180,12 +193,16 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
 }
 
 enum RecordingError: LocalizedError {
-    case permission, noDisplay, unsupportedFormat
+    case permission, microphonePermission, noMicrophone, noDisplay, unsupportedFormat
 
     var errorDescription: String? {
         switch self {
         case .permission:
             "Allow Mac Screen Recorder in System Settings → Privacy & Security → Screen & System Audio Recording, then reopen the app."
+        case .microphonePermission:
+            "Allow Mac Screen Recorder in System Settings → Privacy & Security → Microphone, then reopen the app and enable the microphone."
+        case .noMicrophone:
+            "No microphone is available. Connect a microphone or turn off Microphone in the countdown's audio controls."
         case .noDisplay:
             "No display is available to record. Connect a display and reopen the app."
         case .unsupportedFormat:

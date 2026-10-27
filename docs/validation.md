@@ -47,3 +47,21 @@ The development-session capture checks do not prove that the installed app has r
 - Native UI inspection confirmed the matching filename in LosslessCut, a 2.998-second timeline, start/end cut controls, and Export. Played the video through to 88 frames / 2.998 seconds and visually confirmed the recording's preview. No trim or export was applied to the original recording.
 
 The available UI automation did not expose this windowless app's status item and did not trigger the global hotkey through its application-targeted keyboard input. Those interactions are implemented but have not been verified by physical input. A successful hotkey registration alone is not a complete end-to-end shortcut test.
+
+## Hover audio controls (v0.5.0)
+
+- Warnings-as-errors build, shell syntax checks, signed release packaging, stable-signer installation into `/Applications`, and installed signature verification passed. Verified the installed version is 0.5.0 and includes the audio-input entitlement and microphone usage description.
+- Seven Swift tests passed, including countdown resets at the last second, hover/permission pause overlap, and ignoring late events after completion.
+- `scripts/test-countdown.sh` exercised the actual HUD with app-local tracking events: 3 → 2 → 1, pause beyond three seconds, expansion, independent audio switches, retained choices on re-entry, a full countdown after each exit, cancellation while hovered and during the hide delay, and resetting choices for a new recording.
+- The same HUD check simulated granted, denied, and cancelled microphone prompts. Leaving while permission was pending held the controls open; resolving permission restarted the countdown, and a stale response could not change the next run. These checks did not request or grant real macOS microphone access.
+- Rendered both HUD states to PNG and visually inspected the labels, switches, spacing, and countdown number.
+- The production Recorder created an audio-off H.264 MP4 (2.875 seconds, no audio stream) and a system-audio H.264/AAC MP4 (3.147 seconds). Played a generated tone during the system-audio check; the encoded track had mean volume −21.3 dB and peak −17.9 dB. Both files decoded fully with ffmpeg.
+- A microphone-enabled request without permission failed explicitly before creating an output, with directions to the Microphone permission page.
+
+Real microphone-only and combined-audio recording still require a user-approved microphone grant and an audible input check. App-local tracking events verify the widget handlers; physical pointer movement and clicking the inactive panel remain manual checks.
+
+### Rounded backdrop and hover transition
+
+- Added a stretchable rounded material mask so the behind-window blur and window shadow follow the same corners as the foreground; clipping only the layer had left a faint rectangular backdrop.
+- Hover changes resize and crossfade over 220 ms, keep both layouts centered, ignore stale animation completions after reversal, and respect Reduce Motion.
+- The native HUD check passed with rapid hover reversals. Ran `./scripts/test-countdown.sh --capture-window` to capture the composited windows with ScreenCaptureKit, verified fully transparent corner pixels, and visually inspected both rounded states. This optional flag requires existing screen-capture permission and does not create a recording.

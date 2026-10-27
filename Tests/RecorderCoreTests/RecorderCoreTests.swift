@@ -41,3 +41,62 @@ func captureFitsEncoderLimits(width: Int, height: Int, expectedWidth: Int, expec
     #expect(dimensions.width % 2 == 0 && dimensions.height % 2 == 0)
     #expect(dimensions.width <= 3840 && dimensions.height <= 2160)
 }
+
+@Test func hoveringAtLastSecondPausesAndRestartsTheEntireCountdown() {
+    var countdown = CountdownState()
+    countdown.tick()
+    countdown.tick()
+    #expect(countdown.remainingSeconds == 1)
+
+    countdown.setHovering(true)
+    for _ in 0..<10 { countdown.tick() }
+    #expect(countdown.isPaused)
+    #expect(countdown.remainingSeconds == 3)
+    #expect(!countdown.isComplete)
+
+    countdown.setHovering(false)
+    countdown.tick()
+    countdown.tick()
+    #expect(!countdown.isComplete)
+    countdown.tick()
+    #expect(countdown.isComplete)
+}
+
+@Test func leavingDuringPermissionPromptDoesNotStartRecording() {
+    var countdown = CountdownState()
+    countdown.setHovering(true)
+    countdown.setWaitingForPermission(true)
+    countdown.setHovering(false)
+    for _ in 0..<10 { countdown.tick() }
+    #expect(countdown.isPaused)
+    #expect(countdown.remainingSeconds == 3)
+
+    countdown.setWaitingForPermission(false)
+    #expect(!countdown.isPaused)
+    countdown.tick()
+    #expect(countdown.remainingSeconds == 2)
+}
+
+@Test func permissionCompletingWhileHoveringKeepsCountdownPaused() {
+    var countdown = CountdownState()
+    countdown.setHovering(true)
+    countdown.setWaitingForPermission(true)
+    countdown.setWaitingForPermission(false)
+    countdown.tick()
+    #expect(countdown.isPaused)
+    #expect(countdown.remainingSeconds == 3)
+}
+
+@Test func repeatedHoverEventsAndLateEventsCannotRestartCompletedCountdown() {
+    var countdown = CountdownState()
+    countdown.tick()
+    countdown.setHovering(false)
+    #expect(countdown.remainingSeconds == 2)
+    countdown.tick()
+    countdown.tick()
+    countdown.setHovering(true)
+    countdown.setWaitingForPermission(true)
+    countdown.tick()
+    #expect(countdown.isComplete)
+    #expect(!countdown.isPaused)
+}
