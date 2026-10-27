@@ -24,6 +24,13 @@ Both capture checks launched the binary from the development session, which alre
 
 The development-session capture checks do not prove that the installed app has received a separate first-use Finder permission grant. Certificate continuity is verified; first-use authorization and macOS-controlled reminders still require the normal system policy.
 
+## Countdown (v0.3.0)
+
+- `swift test` passed; release build, installer update compatibility checks, and installed signature verification passed.
+- Native accessibility inspection exposed the countdown HUD displaying `1` and `Starting recording`.
+- Installed-app smoke test produced a 3.092-second H.264 MP4. Extracted and visually inspected its first frame: the countdown HUD was absent.
+- Requested graceful quit during the countdown: exit code 0, no save callback, and zero new MP4 files. The same countdown cancellation method is used by the dot and stop shortcut.
+
 ## Manual checks still required
 
 - First-launch permission grant from the app's permanent install location.

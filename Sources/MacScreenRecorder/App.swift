@@ -20,6 +20,7 @@ struct MacScreenRecorderApp {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let recorder = Recorder()
+    private let countdown = RecordingCountdown()
     private var statusItem: NSStatusItem?
     private var shortcut: GlobalShortcut?
     private var terminationPending = false
@@ -37,13 +38,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateIndicator(.starting)
 
         recorder.onPhaseChange = { [weak self] phase in self?.updateIndicator(phase) }
+        recorder.beforeCapture = { [weak self] in
+            guard let self else { return false }
+            return await countdown.run()
+        }
         recorder.onFinish = { [weak self] url in
             if let url { NSLog("Saved recording: %@", url.path) }
             self?.quit()
         }
         recorder.onFailure = { [weak self] error in self?.showError(error) }
         do {
-            shortcut = try GlobalShortcut { [weak self] in self?.recorder.stop() }
+            shortcut = try GlobalShortcut { [weak self] in self?.stopRecording() }
         } catch {
             showError(error)
             return
@@ -51,7 +56,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { await recorder.start() }
     }
 
-    @objc private func stopRecording() { recorder.stop() }
+    @objc private func stopRecording() {
+        countdown.cancel()
+        recorder.stop()
+    }
 
     private func updateIndicator(_ phase: Recorder.Phase) {
         let color: NSColor
@@ -114,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func quit() {
+        countdown.cancel()
         shortcut?.unregister()
         if terminationPending {
             NSApp.reply(toApplicationShouldTerminate: true)
@@ -127,7 +136,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard !recorder.isFinished else { return .terminateNow }
         terminationPending = true
-        recorder.stop()
+        stopRecording()
         return .terminateLater
     }
 

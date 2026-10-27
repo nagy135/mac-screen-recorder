@@ -12,6 +12,7 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
     var onPhaseChange: ((Phase) -> Void)?
     var onFinish: ((URL?) -> Void)?
     var onFailure: ((Error) -> Void)?
+    var beforeCapture: (() async -> Bool)?
     private(set) var phase: Phase = .starting {
         didSet { onPhaseChange?(phase) }
     }
@@ -57,6 +58,13 @@ final class Recorder: NSObject, SCStreamDelegate, SCRecordingOutputDelegate {
             config.capturesAudio = false
             config.captureMicrophone = false
             config.captureDynamicRange = .SDR
+
+            if let beforeCapture {
+                guard await beforeCapture(), !stopRequested else {
+                    finishWithoutRecording()
+                    return
+                }
+            }
 
             let directory = FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent("Documents/Videos", isDirectory: true)

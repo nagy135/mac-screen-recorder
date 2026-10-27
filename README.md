@@ -1,8 +1,8 @@
 # Mac Screen Recorder
 
-A small native macOS menu bar app: open it to record, click the red dot or press **⌘⌥⇧S** to stop. The finished H.264 MP4 is saved in `~/Documents/Videos`, then the app quits.
+A small native macOS menu bar app: open it for a floating **1, 2, 3** countdown, then record. Click the red dot or press **⌘⌥⇧S** to stop. The finished H.264 MP4 is saved in `~/Documents/Videos`, then the app quits.
 
-No ffmpeg, conversion, countdown, recording window, Dock icon, or third-party dependencies.
+No ffmpeg, conversion, recording window, Dock icon, or third-party dependencies.
 
 ## Use
 
@@ -15,7 +15,7 @@ open "/Applications/Mac Screen Recorder.app"
 
 The installer builds the camera-icon app, signs it with a persistent local certificate, and installs it into `/Applications`. It does not launch the app or start recording. Run the same script after pulling updates. Stop an active recording before installing.
 
-On first launch, allow **Screen & System Audio Recording** in System Settings → Privacy & Security. macOS may require you to quit and reopen the app after granting access. Documents access may also need approval. Later launches start recording as soon as macOS starts the capture stream.
+On first launch, allow **Screen & System Audio Recording** in System Settings → Privacy & Security. macOS may require you to quit and reopen the app after granting access. Documents access may also need approval. Once capture is ready, a small centered widget shows 1, 2, 3 for one second each, then disappears before recording starts. It does not take keyboard focus. Click the menu bar dot or press **⌘⌥⇧S** during the countdown to cancel without creating a recording.
 
 - **Red dot:** recording. Click it (either mouse button) or press **Command + Option + Shift + S** anywhere to stop.
 - **Orange dot:** starting or finalizing the MP4. A stop during startup cancels capture or stops it as soon as startup completes.
@@ -42,7 +42,7 @@ swift test
 
 `--check-permission` prints the current permission status and exits without requesting access or recording. Permissions observed from a terminal can differ from a Finder launch; test the installed app as well.
 
-Once permissions are granted, this records a three-second smoke-test clip into the normal destination and exits after finalization:
+Once permissions are granted, this shows the normal countdown, records a three-second smoke-test clip into the normal destination and exits after finalization:
 
 ```sh
 open -W "dist/Mac Screen Recorder.app" --args --smoke-test
