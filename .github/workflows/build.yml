@@ -1,0 +1,25 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: swift test
+      - name: Build app
+        run: ./scripts/build.sh
+      - name: Zip app preserving bundle metadata
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/Mac Screen Recorder.app" dist/Mac-Screen-Recorder.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mac-Screen-Recorder
+          path: dist/Mac-Screen-Recorder.zip
+          if-no-files-found: error
