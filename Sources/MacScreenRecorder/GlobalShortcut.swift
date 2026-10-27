@@ -2,56 +2,78 @@ import Carbon
 
 @MainActor
 final class GlobalShortcut {
-    private var hotKey: EventHotKeyRef?
-    private var handler: EventHandlerRef?
-    private let action: @MainActor () -> Void
+    enum Action: UInt32 {
+        case save = 1
+        case trim = 2
 
-    init(action: @escaping @MainActor () -> Void) throws {
+        var keyCode: UInt32 { UInt32(self == .save ? kVK_ANSI_S : kVK_ANSI_T) }
+        var label: String { self == .save ? "⌘⌥⇧S" : "⌘⌥⇧T" }
+    }
+
+    private var hotKeys: [EventHotKeyRef] = []
+    private var handler: EventHandlerRef?
+    private let action: @MainActor (Action) -> Void
+    private static let signature: OSType = 0x4D535243 // MSRC
+
+    init(action: @escaping @MainActor (Action) -> Void) throws {
         self.action = action
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)
         )
         let status = InstallEventHandler(
             GetApplicationEventTarget(),
-            { _, _, context in
-                guard let context else { return OSStatus(eventNotHandledErr) }
+            { _, event, context in
+                guard let event, let context else { return OSStatus(eventNotHandledErr) }
+                var identifier = EventHotKeyID()
+                let result = GetEventParameter(
+                    event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                    nil, MemoryLayout<EventHotKeyID>.size, nil, &identifier
+                )
+                guard result == noErr else { return result }
                 // Carbon dispatches application-target events on the main thread.
-                MainActor.assumeIsolated {
-                    Unmanaged<GlobalShortcut>.fromOpaque(context).takeUnretainedValue().action()
+                return MainActor.assumeIsolated {
+                    guard identifier.signature == GlobalShortcut.signature,
+                          let selectedAction = Action(rawValue: identifier.id) else {
+                        return OSStatus(eventNotHandledErr)
+                    }
+                    Unmanaged<GlobalShortcut>.fromOpaque(context).takeUnretainedValue().action(selectedAction)
+                    return noErr
                 }
-                return noErr
             },
             1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &handler
         )
-        guard status == noErr else { throw ShortcutError.registration(status) }
+        guard status == noErr else { throw ShortcutError.registration("stop shortcuts", status) }
 
-        let identifier = EventHotKeyID(signature: 0x4D535243, id: 1) // MSRC
-        let registration = RegisterEventHotKey(
-            UInt32(kVK_ANSI_S), UInt32(cmdKey | optionKey | shiftKey),
-            identifier, GetApplicationEventTarget(), OptionBits(kEventHotKeyExclusive), &hotKey
-        )
-        guard registration == noErr else {
-            if let handler { RemoveEventHandler(handler) }
-            self.handler = nil
-            throw ShortcutError.registration(registration)
+        for selectedAction in [Action.save, .trim] {
+            let identifier = EventHotKeyID(signature: Self.signature, id: selectedAction.rawValue)
+            var hotKey: EventHotKeyRef?
+            let registration = RegisterEventHotKey(
+                selectedAction.keyCode, UInt32(cmdKey | optionKey | shiftKey),
+                identifier, GetApplicationEventTarget(), OptionBits(kEventHotKeyExclusive), &hotKey
+            )
+            guard registration == noErr, let hotKey else {
+                unregister()
+                throw ShortcutError.registration(selectedAction.label, registration)
+            }
+            hotKeys.append(hotKey)
         }
     }
 
     func unregister() {
-        if let hotKey { UnregisterEventHotKey(hotKey) }
+        for hotKey in hotKeys { UnregisterEventHotKey(hotKey) }
         if let handler { RemoveEventHandler(handler) }
-        hotKey = nil
+        hotKeys.removeAll()
         handler = nil
     }
 }
 
 private enum ShortcutError: LocalizedError {
-    case registration(OSStatus)
+    case registration(String, OSStatus)
 
     var errorDescription: String? {
         switch self {
-        case .registration(let code):
-            "Could not register ⌘⌥⇧S (error \(code)). Another app may already use this shortcut."
+        case .registration(let shortcut, let code):
+            "Could not register \(shortcut) (error \(code)). Another app may already use this shortcut."
         }
     }
 }

@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var shortcut: GlobalShortcut?
     private var terminationPending = false
     private var smokeTestScheduled = false
+    private var completionAction: GlobalShortcut.Action?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         StartupTiming.mark("application_ready")
@@ -45,15 +46,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return await countdown.run()
         }
         recorder.onFinish = { [weak self] url in
-            if let url {
-                NSLog("Saved recording: %@", url.path)
-                NSWorkspace.shared.activateFileViewerSelecting([url])
-            }
-            self?.quit()
+            Task { @MainActor in await self?.finishRecording(url) }
         }
         recorder.onFailure = { [weak self] error in self?.showError(error) }
         do {
-            shortcut = try GlobalShortcut { [weak self] in self?.stopRecording() }
+            shortcut = try GlobalShortcut { [weak self] action in self?.requestStop(action) }
         } catch {
             showError(error)
             return
@@ -62,8 +59,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func stopRecording() {
+        requestStop(.save)
+    }
+
+    private func requestStop(_ action: GlobalShortcut.Action) {
+        // The first stop request determines the destination, even if more keys
+        // arrive while the MP4 is being finalized.
+        guard completionAction == nil, !recorder.isFinished else { return }
+        completionAction = action
         countdown.cancel()
         recorder.stop()
+    }
+
+    private func finishRecording(_ url: URL?) async {
+        shortcut?.unregister()
+        if let url {
+            NSLog("Saved recording: %@", url.path)
+            if completionAction == .trim {
+                do {
+                    try await LosslessCut.open(url)
+                    NSLog("Opened recording in LosslessCut: %@", url.path)
+                } catch {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                    let alert = NSAlert()
+                    alert.messageText = "Recording saved; could not open LosslessCut"
+                    alert.informativeText = "\(error.localizedDescription)\n\nYour recording is safe at \(url.path)."
+                    alert.addButton(withTitle: "OK")
+                    NSApp.activate(ignoringOtherApps: true)
+                    alert.runModal()
+                }
+            } else {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
+        }
+        quit()
     }
 
     private func updateIndicator(_ phase: Recorder.Phase) {
@@ -72,15 +101,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch phase {
         case .starting:
             color = .systemOrange
-            text = "Starting recording — click or press ⌘⌥⇧S to cancel"
+            text = "Starting recording — click, ⌘⌥⇧S or ⌘⌥⇧T to cancel"
         case .recording:
             color = .systemRed
-            text = "Recording — click or press ⌘⌥⇧S to stop and save"
-            if CommandLine.arguments.contains("--smoke-test"), !smokeTestScheduled {
+            text = "Recording — click or ⌘⌥⇧S to save; ⌘⌥⇧T to open in LosslessCut"
+            if (CommandLine.arguments.contains("--smoke-test") || CommandLine.arguments.contains("--smoke-test-trim")), !smokeTestScheduled {
                 smokeTestScheduled = true
                 Task {
                     try? await Task.sleep(for: .seconds(3))
-                    recorder.stop()
+                    requestStop(CommandLine.arguments.contains("--smoke-test-trim") ? .trim : .save)
                 }
             }
         case .stopping:
