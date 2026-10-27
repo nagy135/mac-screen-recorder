@@ -1,6 +1,6 @@
 # Mac Screen Recorder
 
-A small native macOS menu bar app: open it for a floating **1, 2, 3** countdown, then record. Click the red dot or press **⌘⌥⇧S** to stop and reveal the saved H.264 MP4 in Finder. Press **⌘⌥⇧T** instead to stop and open the recording in LosslessCut, ready to trim. Videos are saved in `~/Documents/Videos`; the recorder quits after opening the destination.
+A small native macOS menu bar app: open it for a floating **3, 2, 1** countdown, then record. Click the red dot or press **⌘⌥⇧S** to stop and reveal the saved H.264 MP4 in Finder. Press **⌘⌥⇧T** instead to stop and open the recording in LosslessCut, ready to trim. Videos are saved in `~/Documents/Videos`; the recorder quits after opening the destination.
 
 No ffmpeg, conversion, recording window, Dock icon, or third-party dependencies.
 
@@ -15,7 +15,7 @@ open "/Applications/Mac Screen Recorder.app"
 
 The installer builds the camera-icon app, signs it with a persistent local certificate, and installs it into `/Applications`. It does not launch the app or start recording. Run the same script after pulling updates. Stop an active recording before installing.
 
-On first launch, allow **Screen & System Audio Recording** in System Settings → Privacy & Security. macOS may require you to quit and reopen the app after granting access. Documents access may also need approval. Once capture is ready, a small centered widget shows 1, 2, 3 for one second each, then disappears before recording starts. It does not take keyboard focus. Click the menu bar dot or press either stop shortcut during the countdown to cancel without creating a recording or opening another app.
+On first launch, allow **Screen & System Audio Recording** in System Settings → Privacy & Security. macOS may require you to quit and reopen the app after granting access. Documents access may also need approval. Once capture is ready, a small centered widget shows 3, 2, 1 for one second each, then disappears before recording starts. It does not take keyboard focus. Click the menu bar dot or press either stop shortcut during the countdown to cancel without creating a recording or opening another app.
 
 - **Red dot:** recording. Click it (either mouse button) or press **Command + Option + Shift + S** anywhere to stop.
 - **Stop and trim:** press **Command + Option + Shift + T** to finalize the MP4 and open it in LosslessCut. The first stop request chooses the destination; repeated shortcuts during saving do not switch it.

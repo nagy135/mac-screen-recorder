@@ -4,7 +4,7 @@ import AppKit
 @MainActor
 final class RecordingCountdown {
     private let panel: NSPanel
-    private let number = NSTextField(labelWithString: "1")
+    private let number = NSTextField(labelWithString: "3")
     private var steps: [NSView] = []
     private var task: Task<Bool, Never>?
 
@@ -66,7 +66,7 @@ final class RecordingCountdown {
                 ))
             }
             do {
-                for value in 1...3 {
+                for value in (1...3).reversed() {
                     try Task.checkCancellation()
                     number.stringValue = String(value)
                     for (index, step) in steps.enumerated() {
