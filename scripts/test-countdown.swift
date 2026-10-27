@@ -27,9 +27,32 @@ struct CountdownCheck {
                 let number = descendants(content).compactMap { $0 as? NSTextField }
                     .first { $0.accessibilityLabel() == "Recording countdown" }!
                 precondition(number.stringValue == "1", "Countdown must run 3, 2, 1; received \(number.stringValue)")
+                let center = NSPoint(x: panel.frame.midX, y: panel.frame.midY)
                 content.mouseEntered(with: event)
-                try await Task.sleep(for: .milliseconds(300))
+                try await Task.sleep(for: .milliseconds(100))
+                precondition(panel.frame.width > 180 && panel.frame.width < 240,
+                             "Morph must animate the shell between its endpoints")
+                let countdownView = descendants(content).first { $0.identifier?.rawValue == "countdown-content" }!
+                let segments = descendants(content).filter { $0.identifier?.rawValue.hasPrefix("countdown-segment-") == true }
+                    .sorted { $0.identifier!.rawValue < $1.identifier!.rawValue }
+                precondition(segments.count == 3 && segments[0].frame.midY > 27 && segments[0].frame.midY < 158,
+                             "Red countdown segments must travel upward toward Cancel")
+                precondition(segments[0].frame.height > 4 && segments[0].frame.height < 24,
+                             "The moving segments must grow into the button capsule")
+                saveSnapshot(content, to: "dist/countdown-morph-transition.png")
+                try await saveWindowSnapshot(panel, to: "dist/countdown-morph-window.png")
+                try await Task.sleep(for: .milliseconds(650))
                 precondition(panel.frame.width == 240, "Hover must expand the HUD")
+                precondition(abs(panel.frame.midX - center.x) < 1 && abs(panel.frame.midY - center.y) < 1,
+                             "Morph must keep the HUD centered")
+                precondition(countdownView.isHidden, "Settling must hide outgoing countdown content")
+                let cancel = descendants(content).compactMap { $0 as? NSButton }
+                    .first { $0.accessibilityLabel() == "Cancel recording" }!
+                let capsule = segments.reduce(NSRect.null) { $0.union($1.frame) }
+                precondition(abs(capsule.minX - cancel.frame.minX) < 0.5 &&
+                             abs(capsule.maxX - cancel.frame.maxX) < 0.5 &&
+                             capsule.minY == cancel.frame.minY && capsule.height == cancel.frame.height,
+                             "The red segments must join into the actual Cancel button background")
                 let switches = descendants(content).compactMap { $0 as? NSSwitch }
                 let systemAudio = switches.first { $0.accessibilityLabel() == "Mac audio" }!
                 let microphone = switches.first { $0.accessibilityLabel() == "Microphone" }!
@@ -48,20 +71,26 @@ struct CountdownCheck {
                 try await Task.sleep(for: .milliseconds(3_200))
                 precondition(panel.isVisible, "Hover must pause longer than the original countdown")
                 content.mouseExited(with: event)
-                try await Task.sleep(for: .milliseconds(300))
+                try await Task.sleep(for: .milliseconds(750))
                 precondition(panel.frame.width == 180)
+                precondition(number.superview?.layer?.sublayerTransform.m11 == 1 &&
+                             segments[0].frame == NSRect(x: 69, y: 25, width: 10, height: 4),
+                             "Returning must restore the original numeral scale and red segments")
                 precondition(number.stringValue == "3", "Leaving must restart from three")
                 saveSnapshot(content, to: "dist/countdown-restarted.png")
-                try await saveWindowSnapshot(panel, to: "dist/countdown-rounded-window.png")
-                try await Task.sleep(for: .milliseconds(1_100))
+                try await Task.sleep(for: .milliseconds(350))
                 precondition(number.stringValue == "2")
+                try await saveWindowSnapshot(panel, to: "dist/countdown-rounded-window.png")
                 content.mouseEntered(with: event)
                 try await Task.sleep(for: .milliseconds(30))
+                let reversingWidth = panel.frame.width
                 content.mouseExited(with: event)
+                precondition(panel.frame.width == reversingWidth, "Reversing must not jump to an endpoint")
                 try await Task.sleep(for: .milliseconds(30))
                 content.mouseEntered(with: event)
-                try await Task.sleep(for: .milliseconds(300))
+                try await Task.sleep(for: .milliseconds(750))
                 precondition(panel.frame.width == 240, "Rapid hover reversals must finish expanded")
+                precondition(countdownView.isHidden, "An old transition must not hide the incoming settings")
                 precondition(systemAudio.state == .on, "Re-entering must retain choices")
                 content.mouseExited(with: event)
                 let restarted = ContinuousClock.now
@@ -97,7 +126,8 @@ struct CountdownCheck {
                 try await checkPermission(allowed: true, event: event)
                 try await checkPermission(allowed: false, event: event)
                 try await checkCancelledPermission(event: event)
-                print("Countdown HUD passed: hover/pause, repeated restart, independent audio selection, reset, cancellation, hide delay, and granted/denied/cancelled permission prompts")
+                try await checkReducedMotion(event: event)
+                print("Countdown HUD passed: reversible red-segment morph, Cancel capsule alignment, reduced motion, hover/pause, repeated restart, independent audio selection, reset, cancellation, hide delay, and granted/denied/cancelled permission prompts")
                 app.terminate(nil)
             } catch {
                 fatalError("Countdown HUD check failed: \(error)")
@@ -105,6 +135,31 @@ struct CountdownCheck {
         }
         app.run()
         if let trackingMonitor { NSEvent.removeMonitor(trackingMonitor) }
+    }
+
+    @MainActor
+    private static func checkReducedMotion(event: NSEvent) async throws {
+        var reduced = false
+        let countdown = RecordingCountdown(reduceMotion: { reduced })
+        let result = Task { await countdown.run() }
+        try await Task.sleep(for: .milliseconds(100))
+        let panel = NSApp.windows.first { $0.isVisible && $0 is NSPanel }!
+        let content = panel.contentView!
+        content.mouseExited(with: event)
+        content.mouseEntered(with: event)
+        try await Task.sleep(for: .milliseconds(60))
+        reduced = true
+        try await Task.sleep(for: .milliseconds(50))
+        precondition(panel.frame.width == 240, "Enabling Reduce Motion during a transition must snap to settings")
+        precondition(descendants(content).allSatisfy { $0.contentFilters.isEmpty },
+                     "Reduced motion must leave no content blur filters")
+        content.mouseExited(with: event)
+        precondition(panel.frame.width == 180, "Reduce Motion must return to countdown immediately")
+        content.mouseEntered(with: event)
+        precondition(panel.frame.width == 240, "Reduce Motion must open settings immediately")
+        countdown.cancel()
+        let selected = await result.value
+        precondition(selected == nil)
     }
 
     @MainActor

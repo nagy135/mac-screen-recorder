@@ -9,29 +9,45 @@ final class RecordingCountdown: NSObject {
     private let panel: NSPanel
     private let glass: CountdownHoverView
     private let countdownView = NSView()
-    private let optionsView = NSView()
+    private let optionsView = CountdownOptionsView()
     private let number = NSTextField(labelWithString: "3")
+    private let numberMotion = NSView()
+    private let titleMotion = NSView()
+    private let startingLabel = NSTextField(labelWithString: "Starting recording")
+    private let hoverHint = NSTextField(labelWithString: "Hover for options")
+    private let audioTitle = NSTextField(labelWithString: "Audio")
+    private let cancelButton = NSButton()
     private let systemAudioSwitch = NSSwitch()
     private let microphoneSwitch = NSSwitch()
     private let settingsButton = NSButton()
     private var steps: [NSView] = []
+    private var audioRows: [NSView] = []
+    private var shortcutHints: [NSView] = []
     private var state = CountdownState()
     private var audio = RecordingAudioSettings()
     private var timer: Task<Void, Never>?
     private var continuation: CheckedContinuation<RecordingAudioSettings?, Never>?
     private var runID = UUID()
     private var showingOptions = false
-    private var transitionID = UUID()
+    private var transitionTimer: Timer?
+    private var transitionProgress = 0.0
+    private var transitionVelocity = 0.0
+    private var transitionTime = 0.0
+    private var transitionCenter = NSPoint.zero
     private let microphoneAuthorizationStatus: () -> AVAuthorizationStatus
     private let requestMicrophoneAccess: () async -> Bool
+    private let reduceMotion: () -> Bool
 
     init(microphoneAuthorizationStatus: @escaping () -> AVAuthorizationStatus = {
         AVCaptureDevice.authorizationStatus(for: .audio)
     }, requestMicrophoneAccess: @escaping () async -> Bool = {
         await AVCaptureDevice.requestAccess(for: .audio)
+    }, reduceMotion: @escaping () -> Bool = {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }) {
         self.microphoneAuthorizationStatus = microphoneAuthorizationStatus
         self.requestMicrophoneAccess = requestMicrophoneAccess
+        self.reduceMotion = reduceMotion
         let bounds = NSRect(x: 0, y: 0, width: 180, height: 184)
         panel = NSPanel(
             contentRect: bounds,
@@ -73,22 +89,29 @@ final class RecordingCountdown: NSObject {
         countdownView.frame = bounds
         countdownView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
         countdownView.wantsLayer = true
+        countdownView.identifier = NSUserInterfaceItemIdentifier("countdown-content")
         glass.addSubview(countdownView)
+        numberMotion.frame = bounds
+        numberMotion.wantsLayer = true
+        countdownView.addSubview(numberMotion)
         number.font = .monospacedDigitSystemFont(ofSize: 72, weight: .medium)
         number.textColor = .white
         number.alignment = .center
         number.frame = NSRect(x: 20, y: 65, width: 140, height: 92)
         number.setAccessibilityLabel("Recording countdown")
-        countdownView.addSubview(number)
+        numberMotion.addSubview(number)
         addLabel("Starting recording", to: countdownView,
-                 frame: NSRect(x: 10, y: 40, width: 160, height: 18), size: 12, centered: true)
+                 frame: NSRect(x: 10, y: 40, width: 160, height: 18), size: 12, centered: true,
+                 label: startingLabel)
         addLabel("Hover for options", to: countdownView,
-                 frame: NSRect(x: 10, y: 5, width: 160, height: 14), size: 10, centered: true)
+                 frame: NSRect(x: 10, y: 5, width: 160, height: 14), size: 10, centered: true,
+                 label: hoverHint)
         for index in 0..<3 {
             let step = NSView(frame: NSRect(x: 69 + index * 16, y: 25, width: 10, height: 4))
             step.wantsLayer = true
-            step.layer?.cornerRadius = 2
-            countdownView.addSubview(step)
+            step.identifier = NSUserInterfaceItemIdentifier("countdown-segment-\(index)")
+            step.layer?.mask = CAShapeLayer()
+            glass.addSubview(step)
             steps.append(step)
         }
 
@@ -97,16 +120,18 @@ final class RecordingCountdown: NSObject {
         optionsView.wantsLayer = true
         optionsView.isHidden = true
         glass.addSubview(optionsView)
-        addLabel("Audio", to: optionsView,
-                 frame: NSRect(x: 20, y: 148, width: 140, height: 20), size: 13, bold: true)
-        let cancelButton = NSButton()
+        titleMotion.frame = NSRect(x: 0, y: 0, width: 240, height: 184)
+        titleMotion.wantsLayer = true
+        optionsView.addSubview(titleMotion)
+        addLabel("Audio", to: titleMotion,
+                 frame: NSRect(x: 20, y: 148, width: 140, height: 20), size: 13, bold: true,
+                 label: audioTitle)
         cancelButton.frame = NSRect(x: 166, y: 146, width: 58, height: 24)
         cancelButton.title = "Cancel"
         cancelButton.font = .systemFont(ofSize: 11, weight: .semibold)
         cancelButton.isBordered = false
         cancelButton.wantsLayer = true
         cancelButton.layer?.cornerRadius = 7
-        cancelButton.layer?.backgroundColor = NSColor.systemRed.cgColor
         cancelButton.contentTintColor = .white
         cancelButton.toolTip = "Cancel recording"
         cancelButton.setAccessibilityLabel("Cancel recording")
@@ -119,7 +144,7 @@ final class RecordingCountdown: NSObject {
                     action: #selector(microphoneChanged))
         addShortcutHint(action: .save, x: 12, width: 88)
         addShortcutHint(action: .trim, x: 112, width: 116)
-        settingsButton.frame = NSRect(x: 157, y: 76, width: 18, height: 20)
+        settingsButton.frame = NSRect(x: 137, y: 5, width: 18, height: 20)
         settingsButton.image = NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: nil)
         settingsButton.isBordered = false
         settingsButton.contentTintColor = .systemOrange
@@ -128,7 +153,7 @@ final class RecordingCountdown: NSObject {
         settingsButton.target = self
         settingsButton.action = #selector(openMicrophoneSettings)
         settingsButton.isHidden = true
-        optionsView.addSubview(settingsButton)
+        audioRows[1].addSubview(settingsButton)
     }
 
     func run() async -> RecordingAudioSettings? {
@@ -166,7 +191,7 @@ final class RecordingCountdown: NSObject {
     }
 
     private func finish(_ result: RecordingAudioSettings?) {
-        transitionID = UUID()
+        stopTransition()
         let pending = continuation
         continuation = nil
         timer?.cancel()
@@ -221,39 +246,149 @@ final class RecordingCountdown: NSObject {
     private func showOptions(_ visible: Bool) {
         guard visible != showingOptions || !panel.isVisible else { return }
         showingOptions = visible
-        let currentTransition = UUID()
-        transitionID = currentTransition
-        let width: CGFloat = visible ? 240 : 180
-        let height: CGFloat = 184
-        let frame = panel.frame
-        let target = NSRect(x: frame.midX - width / 2, y: frame.midY - height / 2,
-                            width: width, height: height)
-        guard panel.isVisible, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
-            panel.setFrame(target, display: true)
-            countdownView.alphaValue = visible ? 0 : 1
-            optionsView.alphaValue = visible ? 1 : 0
-            countdownView.isHidden = visible
-            optionsView.isHidden = !visible
-            panel.invalidateShadow()
+        countdownView.setAccessibilityHidden(visible)
+        optionsView.setAccessibilityHidden(!visible)
+        if transitionTimer == nil {
+            transitionCenter = NSPoint(x: panel.frame.midX, y: panel.frame.midY)
+        }
+        guard panel.isVisible, !reduceMotion() else {
+            stopTransition()
+            transitionProgress = visible ? 1 : 0
+            applyTransition(settled: true)
             return
         }
 
         countdownView.isHidden = false
         optionsView.isHidden = false
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.22
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            panel.animator().setFrame(target, display: true)
-            countdownView.animator().alphaValue = visible ? 0 : 1
-            optionsView.animator().alphaValue = visible ? 1 : 0
-        } completionHandler: { [weak self] in
-            Task { @MainActor in
-                guard let self, self.transitionID == currentTransition else { return }
-                self.countdownView.isHidden = visible
-                self.optionsView.isHidden = !visible
-                self.panel.invalidateShadow()
-            }
+        guard transitionTimer == nil else { return }
+        transitionTime = CACurrentMediaTime()
+        let animation = Timer(timeInterval: 1.0 / 60, target: self,
+                              selector: #selector(advanceTransition), userInfo: nil, repeats: true)
+        transitionTimer = animation
+        // Continue while a switch or button is tracking the pointer.
+        RunLoop.main.add(animation, forMode: .common)
+        applyTransition(settled: false)
+    }
+
+    @objc private func advanceTransition() {
+        let now = CACurrentMediaTime()
+        let delta = min(now - transitionTime, 0.032)
+        transitionTime = now
+        let target = showingOptions ? 1.0 : 0.0
+        if reduceMotion() {
+            transitionProgress = target
+            stopTransition()
+            applyTransition(settled: true)
+            return
         }
+        // Exact critically damped spring; retarget without discarding position or velocity.
+        let displacement = transitionProgress - target
+        let coefficient = transitionVelocity + 19 * displacement
+        let decay = exp(-19 * delta)
+        transitionProgress = target + (displacement + coefficient * delta) * decay
+        transitionVelocity = (transitionVelocity - 19 * coefficient * delta) * decay
+        let settled = abs(target - transitionProgress) < 0.0005 && abs(transitionVelocity) < 0.008
+        if settled {
+            transitionProgress = target
+            stopTransition()
+        }
+        applyTransition(settled: settled)
+    }
+
+    private func stopTransition() {
+        transitionTimer?.invalidate()
+        transitionTimer = nil
+        transitionVelocity = 0
+    }
+
+    private func applyTransition(settled: Bool) {
+        let progress = min(1, max(0, transitionProgress))
+        let width = 180 + 60 * progress
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        panel.setFrame(NSRect(x: transitionCenter.x - width / 2, y: transitionCenter.y - 92,
+                              width: width, height: 184), display: true)
+        countdownView.frame = NSRect(x: (width - 180) / 2, y: 0, width: 180, height: 184)
+        optionsView.frame = NSRect(x: (width - 240) / 2, y: 0, width: 240, height: 184)
+        countdownView.alphaValue = 1
+        optionsView.alphaValue = 1
+        numberMotion.alphaValue = 1 - smoothstep(0.04, 0.52, progress)
+        let scale = 1 - 0.42 * progress
+        var numeralTransform = CATransform3DMakeScale(scale, scale, 1)
+        numeralTransform.m41 = 90 * (1 - scale) - 69 * progress
+        numeralTransform.m42 = 111 * (1 - scale) + 47 * progress
+        numberMotion.layer?.sublayerTransform = numeralTransform
+        startingLabel.alphaValue = 1 - smoothstep(0.02, 0.40, progress)
+        startingLabel.setFrameOrigin(NSPoint(x: 10 - 16 * progress, y: 40 + 10 * progress))
+        hoverHint.alphaValue = 1 - smoothstep(0, 0.25, progress)
+        titleMotion.alphaValue = smoothstep(0.35, 0.91, progress)
+        titleMotion.layer?.sublayerTransform = CATransform3DMakeTranslation(
+            69 * (1 - progress), -47 * (1 - progress), 0
+        )
+        for (index, row) in audioRows.enumerated() {
+            row.alphaValue = smoothstep(index == 0 ? 0.44 : 0.53, index == 0 ? 0.91 : 0.98, progress)
+            row.setFrameOrigin(NSPoint(x: 20, y: (index == 0 ? 107 : 71) - (index == 0 ? 7 : 9) * (1 - progress)))
+        }
+        for hint in shortcutHints {
+            hint.alphaValue = smoothstep(0.61, 1, progress)
+            hint.setFrameOrigin(NSPoint(x: hint.frame.minX, y: 21 - 5 * (1 - progress)))
+        }
+        applySegments(progress: progress, width: width)
+        optionsView.acceptsInteraction = showingOptions && progress > 0.65
+        if settled {
+            countdownView.isHidden = showingOptions
+            optionsView.isHidden = !showingOptions
+            panel.invalidateShadow()
+        }
+        CATransaction.commit()
+    }
+
+    private func applySegments(progress: Double, width: Double) {
+        let travel = smoothstep(0.04, 0.94, progress)
+        let widen = smoothstep(0.28, 0.93, progress)
+        let railWidth = 42 + 16 * widen
+        let gap = 6 * (1 - widen)
+        let segmentWidth = (railWidth - 2 * gap) / 3
+        let height = 4 + 20 * widen
+        let center = NSPoint(x: width / 2 + 75 * travel, y: 27 + 131 * travel)
+        // The real hit target follows the red capsule as its label appears.
+        cancelButton.setFrameOrigin(NSPoint(x: 166 + 75 * (travel - 1), y: center.y - 12))
+        cancelButton.alphaValue = smoothstep(0.66, 0.96, progress)
+        for (index, step) in steps.enumerated() {
+            step.frame = NSRect(x: center.x - railWidth / 2 + Double(index) * (segmentWidth + gap),
+                                y: center.y - height / 2, width: segmentWidth + 0.25 * widen, height: height)
+            let innerRadius = 2 * (1 - widen)
+            let leftRadius = index == 0 ? 2 + 5 * widen : innerRadius
+            let rightRadius = index == 2 ? 2 + 5 * widen : innerRadius
+            if let mask = step.layer?.mask as? CAShapeLayer {
+                mask.frame = step.bounds
+                mask.path = segmentPath(size: step.bounds.size, left: leftRadius, right: rightRadius)
+            }
+            let glow = index < state.remainingSeconds ? 1 : smoothstep(0, 0.35, progress)
+            step.layer?.backgroundColor = NSColor.systemRed.blended(
+                withFraction: 1 - glow, of: NSColor.white.withAlphaComponent(0.2)
+            )?.cgColor
+        }
+    }
+
+    private func segmentPath(size: NSSize, left: Double, right: Double) -> CGPath {
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: left, y: 0))
+        path.addLine(to: CGPoint(x: size.width - right, y: 0))
+        path.addQuadCurve(to: CGPoint(x: size.width, y: right), control: CGPoint(x: size.width, y: 0))
+        path.addLine(to: CGPoint(x: size.width, y: size.height - right))
+        path.addQuadCurve(to: CGPoint(x: size.width - right, y: size.height), control: CGPoint(x: size.width, y: size.height))
+        path.addLine(to: CGPoint(x: left, y: size.height))
+        path.addQuadCurve(to: CGPoint(x: 0, y: size.height - left), control: CGPoint(x: 0, y: size.height))
+        path.addLine(to: CGPoint(x: 0, y: left))
+        path.addQuadCurve(to: CGPoint(x: left, y: 0), control: .zero)
+        path.closeSubpath()
+        return path
+    }
+
+    private func smoothstep(_ start: Double, _ end: Double, _ value: Double) -> Double {
+        let progress = min(1, max(0, (value - start) / (end - start)))
+        return progress * progress * (3 - 2 * progress)
     }
 
     @objc private func systemAudioChanged() {
@@ -309,8 +444,9 @@ final class RecordingCountdown: NSObject {
     }
 
     private func addLabel(_ text: String, to view: NSView, frame: NSRect,
-                          size: CGFloat, centered: Bool = false, bold: Bool = false) {
-        let label = NSTextField(labelWithString: text)
+                          size: CGFloat, centered: Bool = false, bold: Bool = false,
+                          label suppliedLabel: NSTextField? = nil) {
+        let label = suppliedLabel ?? NSTextField(labelWithString: text)
         label.frame = frame
         label.font = .systemFont(ofSize: size, weight: bold ? .semibold : .medium)
         label.textColor = NSColor.white.withAlphaComponent(bold ? 1 : 0.75)
@@ -320,16 +456,20 @@ final class RecordingCountdown: NSObject {
 
     private func addAudioRow(_ title: String, symbol: String, y: CGFloat,
                              control: NSSwitch, action: Selector) {
-        let image = NSImageView(frame: NSRect(x: 20, y: y + 5, width: 18, height: 20))
+        let row = NSView(frame: NSRect(x: 20, y: y, width: 200, height: 30))
+        row.wantsLayer = true
+        optionsView.addSubview(row)
+        audioRows.append(row)
+        let image = NSImageView(frame: NSRect(x: 0, y: 5, width: 18, height: 20))
         image.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         image.contentTintColor = NSColor.white.withAlphaComponent(0.8)
-        optionsView.addSubview(image)
-        addLabel(title, to: optionsView, frame: NSRect(x: 46, y: y + 5, width: 110, height: 20), size: 12)
-        control.frame = NSRect(x: 184, y: y, width: 36, height: 30)
+        row.addSubview(image)
+        addLabel(title, to: row, frame: NSRect(x: 26, y: 5, width: 110, height: 20), size: 12)
+        control.frame = NSRect(x: 164, y: 0, width: 36, height: 30)
         control.target = self
         control.action = action
         control.setAccessibilityLabel(title)
-        optionsView.addSubview(control)
+        row.addSubview(control)
     }
 
     private func addShortcutHint(action: GlobalShortcut.Action, x: CGFloat, width: CGFloat) {
@@ -344,6 +484,16 @@ final class RecordingCountdown: NSObject {
         label.setAccessibilityLabel("\(title): Command Option Shift \(action.label.last!)")
         group.addSubview(label)
         optionsView.addSubview(group)
+        shortcutHints.append(group)
+    }
+}
+
+@MainActor
+private final class CountdownOptionsView: NSView {
+    var acceptsInteraction = false
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        acceptsInteraction ? super.hitTest(point) : nil
     }
 }
 

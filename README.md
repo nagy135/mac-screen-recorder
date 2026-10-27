@@ -27,6 +27,8 @@ On first launch, allow **Screen & System Audio Recording** in System Settings �
 
 Hover over the countdown to replace it with audio controls and pause it. The compact panel shows muted **Finder** and **LosslessCut** shortcut hints (**⌘⌥⇧S** / **⌘⌥⇧T**) along the bottom; either shortcut cancels while the countdown is running. Click the red **Cancel** button at the top right to cancel without creating a recording. Enable **Mac audio** to include the Mac's sound, **Microphone** to include the default input device, or both. Both switches start off for each recording. Moving away restarts the full **3, 2, 1** countdown with your choices; hovering again lets you revise them. The controls stay paused while macOS asks for microphone permission. If access is denied, the microphone switch stays off and a warning icon opens its System Settings permission page. System audio and microphone audio are included in the MP4 through native ScreenCaptureKit recording.
 
+The centered glass widens while the three red countdown segments travel upward and merge into the Cancel button. Moving away reverses the same motion smoothly, returning the segments to the countdown. macOS Reduce Motion makes the change immediate.
+
 - **Red dot:** recording. Click it (either mouse button) or press **Command + Option + Shift + S** anywhere to stop.
 - **Stop and trim:** press **Command + Option + Shift + T** to finalize the MP4 and open it in LosslessCut. The first stop request chooses the destination; repeated shortcuts during saving do not switch it.
 - **Orange dot:** starting or finalizing the MP4. A stop during startup cancels capture or stops it as soon as startup completes.
@@ -78,7 +80,7 @@ Swift tests cover filename collisions, folder errors, encoder-safe capture dimen
 ./scripts/test-countdown.sh
 ```
 
-The HUD check saves images in `dist/` for layout inspection. Its permission checks use simulated responses and do not change macOS permissions. These checks do not replace a real capture test with macOS permission granted. To check audio manually, record with each combination of switches, play a sound for Mac audio, speak into the microphone, and confirm playback includes only the sources you enabled.
+The HUD check saves images in `dist/` for layout inspection and checks the red-segment morph, Cancel capsule alignment, centered resizing, rapid reversals, and Reduce Motion, including changes during an animation. Add `--capture-window` to save composited HUD-only screenshots when screen-recording permission is already available. Its microphone permission checks use simulated responses and do not change macOS permissions. These checks do not replace a real recording test with macOS permission granted. To check audio manually, record with each combination of switches, play a sound for Mac audio, speak into the microphone, and confirm playback includes only the sources you enabled.
 
 For a three-second capture through the production recorder without opening Finder, run `./scripts/test-audio-recording.sh` (audio off), add `--system-audio`, add `--microphone`, or add both. This writes a real MP4 into `~/Documents/Videos` and prints its path. Microphone checks require permission already granted to the launching context; they do not request it.
 
